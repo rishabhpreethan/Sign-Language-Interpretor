@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Sign Recognition</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+        body {
+            font-family: 'Poppins', sans-serif;
+            color: white;
+            background-color: #191a1a;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px
+        }
+
+        .video-feed {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        .details-actions {
+            display: flex;
+            justify-content: space-between;
+            width: 1200px; /* Same as video feed width */
+        }
+
+        .details {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .actions {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        img {
+            border: 15px solid #202222;
+            border-radius: 10px;
+        }
+
+        button {
+            background-color: #202222;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 30px;
+            transition: background-color 0.7s;
+        }
+
+        button:hover {
+            background-color: #2d2f2f;
+        }
+
+        #del_one_char:hover, #clearButton:hover {
+            background-color: red;  /* Red hover color for Delete and Clear buttons */
+        }
+        
+        #speakButton:hover {
+            background-color: green;  /* Green hover color for the Speak button */
+        }
+
+        h1, h2 {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Hand Sign Recognition</h1>
+    <div class="container">
+        <div class="video-feed">
+            <h2>Live Camera Feed</h2>
+            <img src="{{ url_for('video_feed') }}" width="1200" height="480">
+        </div>
+        <div class="details-actions">
+            <div class="details">
+                <h2 id="prediction">Prediction: {{prediction}}</h2>
+                <h2 id="sentence">Sentence: {{sentence}}</h2>
+                <div id="suggestions">
+                    <!-- Buttons for suggestions will be dynamically added here -->
+                </div>
+            </div>
+            <div class="actions">
+                <button id="speakButton">Speak Sentence</button>
+                <form action="/delete" method="post">
+                    <button type="submit" name="delete_one_char" id="del_one_char">Delete One Character</button>
+                </form>
+                <button id="clearButton">Clear Sentence</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('clearButton').addEventListener('click', function() {
+            // Ensure this is a POST request and handle the response
+            fetch('/clear_sentence', { 
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.success) {
+                    document.getElementById('sentence').innerText = 'Sentence: ';  // Clear the displayed sentence text
+                    console.log("Sentence cleared successfully.");
+                } else {
+                    console.error("Failed to clear the sentence.");
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+        function updateData() {
+            fetch('/get_data')
+                .then(response => response.json())
+                .then(data => {
+                document.getElementById('prediction').innerText = 'Prediction: ' + data.prediction;
+                document.getElementById('sentence').innerText = 'Sentence: ' + data.sentence;
+    
+                const words = data.sentence.trim().split(" ");
+                const lastWord = words.length > 0 ? words[words.length - 1] : '';
+                fetch(`/get_suggestions?last_char=${lastWord}`)
+                    .then(response => response.json())
+                    .then(suggestions => {
+                        const suggestionsContainer = document.getElementById('suggestions');
+                        suggestionsContainer.innerHTML = '';  // Clear previous suggestions
+                        suggestions.forEach(suggestion => {
+                            const button = document.createElement('button');
+                            button.innerText = suggestion.toUpperCase();
+                            button.onclick = function() {
+                                fetch(`/add_to_sentence?suggestion=${encodeURIComponent(suggestion.toUpperCase())}`)
+                                    .then(() => updateData());  // Update after adding the suggestion
+                            };
+                            suggestionsContainer.appendChild(button);
+                        });
+                    })
+                    .catch(error => console.error('Error fetching suggestions:', error));
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+    
+        document.getElementById('speakButton').addEventListener('click', function() {
+            let sentence = document.getElementById('sentence').innerText.replace('Sentence: ', '');
+            speak(sentence);
+        });
+    
+        function speak(text) {
+            if (!speechSynthesis) {
+                alert("Sorry, your browser does not support text to speech!");
+                return;
+            }
+            let utterance = new SpeechSynthesisUtterance(text);
+            speechSynthesis.speak(utterance);
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.style.width = (sidebar.style.width === '0px' || sidebar.style.width === '') ? '250px' : '0px';
+        }
+    
+        setInterval(updateData, 1000);  // Update every second
+    </script>
+    
+    
+</body>
+</html>
